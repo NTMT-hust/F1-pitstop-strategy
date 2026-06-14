@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import pandas as pd
+pd.set_option('future.no_silent_downcasting', True)
 from scipy.stats import linregress
 
 VALID_COMPOUNDS = ["SOFT", "MEDIUM", "HARD"]
@@ -467,6 +468,43 @@ def add_telemetry_features(df):
     return df
 
 
+def add_stochastic_features(df):
+
+    df = df.sort_values(
+        by=['Driver', 'Stint', 'LapNumber']
+    ).copy()
+
+    df['TrackStatus_str'] = (
+        df['TrackStatus']
+        .astype(str)
+    )
+
+    df['Prev_TrackStatus'] = (
+        df.groupby('Driver')[
+            'TrackStatus_str'
+        ]
+        .shift(1)
+        .fillna('1')
+    )
+
+    vsc_sc_codes = ['4', '6']
+
+    df['Stochastic_Shock_VSC_SC'] = (
+        (df['Prev_TrackStatus'] == '1') &
+        (df['TrackStatus_str'].isin(vsc_sc_codes))
+    ).astype(int)
+
+    df = df.drop(
+        columns=[
+            'TrackStatus_str',
+            'Prev_TrackStatus'
+        ]
+    )
+
+    return df
+
+
+
 def preprocess_race_weekend(
     laps_csv,
     telemetry_csv
@@ -501,8 +539,7 @@ def preprocess_race_weekend(
             group_keys=False
         )
         .apply(
-            compute_pace_degradation,
-            include_groups=False
+            compute_pace_degradation
         )
     )
 
@@ -511,6 +548,8 @@ def preprocess_race_weekend(
     )
 
     df = add_telemetry_features(df)
+
+    df = add_stochastic_features(df)
 
     mode_series = (
         df['TrackStatus']
@@ -557,7 +596,6 @@ def process_all_races(
     )
 
     for year in os.listdir(laps_root):
-
         year_path = os.path.join(
             laps_root,
             year
