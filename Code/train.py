@@ -26,7 +26,7 @@ from sklearn.metrics import (
 # CONFIG
 # =========================================================
 
-DATA_PATH = r"C:\Nguyen Tri\Code\Statisanalyss\all_training_data.csv"
+DATA_PATH = "C:/Nguyen Tri/Code/Statisanalyss/all_training_data.csv"
 
 SEQ_LENGTH = 20
 
@@ -196,33 +196,39 @@ test_df['pit_window_delta'] = (
 # =========================================================
 
 categorical_cols = [
-
     'Compound',
     'Team'
 ]
 
 continuous_cols = [
 
+    # race state
     'LapTime_Seconds',
     'Position',
     'LapNumber',
     'TyreLife',
     'TrackStatus',
 
+    # pace evolution
     'delta_laptime',
     'CumulativeTimeStint',
     'race_progress_fraction',
 
+    # tire degradation
     'relative_tire_age',
     'tire_compound_age_delta',
     'tire_performance_decay',
+
+    # rolling pace metrics
     'rolling_pace_mean_5',
     'pace_std_5',
     'pace_degradation_slope',
 
+    # pit strategy features
     'historical_pit_lap',
     'pit_window_delta',
 
+    # telemetry
     'Speed_mean',
     'Speed_max',
     'Speed_std',
@@ -239,12 +245,15 @@ continuous_cols = [
     'DRS_mean',
     'DRS_sum',
 
+    # traffic
     'DistanceToDriverAhead_mean',
     'DistanceToDriverAhead_min',
 
+    # gearbox
     'nGear_mean',
     'nGear_max',
 
+    # engineered strategy indicators
     'traffic_pressure',
     'drs_dependency',
     'thermal_stress_proxy',
@@ -252,7 +261,6 @@ continuous_cols = [
     'brake_aggression',
     'pace_vs_ahead'
 ]
-
 
 # =========================================================
 # ENCODE CATEGORICALS
@@ -523,8 +531,6 @@ class F1PitStopPredictor(nn.Module):
 
         self.relu = nn.ReLU()
 
-        self.sigmoid = nn.Sigmoid()
-
     def forward(
         self,
         x
@@ -566,8 +572,6 @@ class F1PitStopPredictor(nn.Module):
 
         x = self.output(x)
 
-        x = self.sigmoid(x)
-
         return x
 
 
@@ -586,7 +590,12 @@ positive_weight = (
     len(y_train[y_train == 1])
 )
 
-criterion = nn.BCELoss()
+positive_weight_tensor = torch.tensor(
+    [positive_weight], 
+    dtype=torch.float32
+).to(DEVICE)
+
+criterion = nn.BCEWithLogitsLoss(pos_weight=positive_weight_tensor)
 
 optimizer = torch.optim.Adam(
     model.parameters(),
@@ -662,7 +671,7 @@ for epoch in range(EPOCHS):
             outputs = model(batch_x)
 
             probs = (
-                outputs
+                torch.sigmoid(outputs)
                 .squeeze()
                 .cpu()
                 .numpy()
@@ -683,7 +692,7 @@ for epoch in range(EPOCHS):
         all_targets,
         all_probs
     )
-    
+
     precision = precision_score(
         all_targets,
         (np.array(all_probs) >= 0.5).astype(int)
@@ -726,11 +735,11 @@ for epoch in range(EPOCHS):
 # LOAD BEST MODEL
 # =========================================================
 
-model.load_state_dict(
-    torch.load(
-        "best_f1_model.pt"
-    )
-)
+# model.load_state_dict(
+#     torch.load(
+#         "best_f1_model.pt"
+#     )
+# )
 
 
 # =========================================================
@@ -752,7 +761,7 @@ with torch.no_grad():
         outputs = model(batch_x)
 
         probs = (
-            outputs
+            torch.sigmoid(outputs)
             .squeeze()
             .cpu()
             .numpy()
